@@ -1,0 +1,3 @@
+[submodule "ssh_1d_sat_gain/ssh_1d_cpp/pybind11"]
+	path = ssh_1d_sat_gain/ssh_1d_cpp/pybind11
+	url = https://github.com/pybind/pybind11
