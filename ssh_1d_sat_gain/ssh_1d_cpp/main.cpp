@@ -1,17 +1,18 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/eigen.h>
 #include <Eigen/Dense>
+#include <unsupported/Eigen/FFT>
 #include <iostream>
 #include <complex>
 #include <functional>
 #include <fstream>
+#include <vector>
  
 using namespace Eigen;
 using PrimeFunction = std::function<MatrixXcd(const double, const MatrixXcd&)>;
+namespace py = pybind11;
 
 VectorXd maskA, maskB;
-// std::ofstream paramsFile("params_cpp.txt");
-// std::ofstream dataFile("data_cpp.txt");
 
 void setMasks(const int Ns) 
 {
@@ -38,9 +39,7 @@ void setOffDiagonal(const int Ns, const double t1, const double t2)
         double t = (i%2==0? t_intra : t_inter);
         offDiagonal(i, i+1) = t;
         offDiagonal(i+1, i) = t;
-        
     }
-    
 }
 
 
@@ -61,23 +60,6 @@ const MatrixXcd time_series(int N, double psi0,
     double t1, double t2) {
     int Ns = 2*N+1;
 
-    // if (paramsFile.is_open()) {
-        
-    //     paramsFile << N << std::endl;
-    //     paramsFile << psi0 << std::endl;
-    //     paramsFile << satGainA << std::endl;
-    //     paramsFile << satGainB << std::endl;
-    //     paramsFile << gammaA << std::endl;
-    //     paramsFile << gammaB << std::endl;
-    //     paramsFile << time_end << std::endl;
-    //     paramsFile << time_delta << std::endl;
-    //     paramsFile << t1 << std::endl;
-    //     paramsFile << t2 << std::endl;
-    //     paramsFile.close();
-    // }
-
-    
-
     MatrixXcd psi0_(Ns, 1);
     psi0_.setConstant(psi0);
     double time_start = 0.;
@@ -97,7 +79,6 @@ const MatrixXcd time_series(int N, double psi0,
         result = (satGainA*satGainTerm - MatrixXcd::Constant(Ns,1,gammaA)).cwiseProduct(psi).cwiseProduct(maskA);
         result += (satGainB*satGainTerm - MatrixXcd::Constant(Ns,1,gammaB)).cwiseProduct(psi).cwiseProduct(maskB);
         result -= std::complex<double>(0.,1.0)*offDiagonal*psi;
-        // result = offDiagonal*psi/std::complex<double>(0.,1.0);
         return result;
     };
     
@@ -110,25 +91,47 @@ const MatrixXcd time_series(int N, double psi0,
     MatrixXcd t_psi_values(t_values.size(), Ns+1);
     t_psi_values << t_values , psi_values;
 
-    // if (dataFile.is_open()) {
-    //     for (int i = 0; i < t_psi_values.real().rows(); i++) {
-    //         for (int j = 0; j < t_psi_values.real().cols(); j++) {
-    //             dataFile << t_psi_values.real()(i, j) << " ";
-    //         }
-    //         dataFile << "\n";
-    //     }
-    //     dataFile.close();
-    // }
-
     return t_psi_values;
 }
 
+// //tentative function to do fft and check oscillating, but python is more convenient for now:
+// bool time_series_is_oscillating(const MatrixXcd& time_series, double time_window_start, double time_window_end, double threshold)
+// {
+//     ArrayXd t_values = time_series.col(0).real();
+//     // MatrixXcd psi_values = time_series.rightCols(time_series.cols()-1);
+//     // Array<int, Dynamic, 1> time_section_filter = (t_values>time_window_start).cast<int>()*(t_values<time_window_end).cast<int>();
+    
+//     int start_section_index = 0;
+//     int end_section_index = t_values.rows()-1;
+//     for (int i=0; i< t_values.rows(); i++)
+//     {
+//         if (start_section_index==-1 && t_values(i,0) > time_window_start)
+//             start_section_index = i;
+//         else if (t_values(i,0) > time_window_end) {
+//             end_section_index = i;
+//             break;
+//         }
+//     }
 
+//     FFT<double> fft;
+//     // int num_section_rows = time_section_filter.cast<int>().sum();
+//     MatrixXcd selected_psi = time_series.block(start_section_index,1,end_section_index-start_section_index+1, time_series.cols()-1);
+//     MatrixXcd psi_fft(selected_psi.rows(),selected_psi.cols());
+//     for (int i=0; i< selected_psi.cols(); i++)
+//     {
+//         // VectorXcd tmpOut;
+//         psi_fft.col(i) = fft.fwd(selected_psi.col(i));
+//     }
+
+//     return psi_fft.cwiseAbs2().rowwise().sum().maxCoeff() > threshold;
+// }
 
 PYBIND11_MODULE(ssh_1d, m) {
     m.doc() = "pybind11 example plugin"; // optional module docstring
 
-    m.def("time_series", &time_series, "Time series of 1D SSH system with domain wall");
+    m.def("time_series", &time_series, "Time series of 1D SSH system with domain wall", py::call_guard<py::gil_scoped_release>(),
+        py::arg("N"),py::arg("psi0"),py::arg("satGainA"),py::arg("satGainB"),py::arg("gammaA"),py::arg("gammaB"),
+        py::arg("time_end"),py::arg("time_delta"),py::arg("t1"),py::arg("t2"));
 }
 
 int main() {
