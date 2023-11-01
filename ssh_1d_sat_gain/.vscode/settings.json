@@ -78,7 +78,8 @@
         "typeinfo": "cpp",
         "valarray": "cpp",
         "variant": "cpp",
-        "fft": "cpp"
+        "fft": "cpp",
+        "codecvt": "cpp"
     },
     
 }

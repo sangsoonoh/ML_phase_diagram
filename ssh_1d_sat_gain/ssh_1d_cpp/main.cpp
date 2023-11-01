@@ -1,7 +1,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/eigen.h>
 #include <Eigen/Dense>
-#include <unsupported/Eigen/FFT>
 #include <iostream>
 #include <complex>
 #include <functional>
@@ -12,35 +11,7 @@ using namespace Eigen;
 using PrimeFunction = std::function<MatrixXcd(const double, const MatrixXcd&)>;
 namespace py = pybind11;
 
-VectorXd maskA, maskB;
-
-void setMasks(const int Ns) 
-{
-    maskA = VectorXd::Zero(Ns);
-    maskB = VectorXd::Zero(Ns);
-    for (int i=0; i< Ns; i++) {
-        if (i%2==0) maskA(i)=1;
-        else maskB(i)=1;
-    }
-}
-
-MatrixXd offDiagonal;
-void setOffDiagonal(const int Ns, const double t1, const double t2)
-{
-    offDiagonal = MatrixXd::Zero(Ns,Ns);
-
-    int N = (Ns-1)/2;
-
-    double t_intra = t1, t_inter = t2;
-    for (int i = 0; i < Ns-1; i++){ 
-        if (i==N) { //swap t1/t2 when about to start second half of the bonds
-            t_intra = t2; t_inter = t1;
-        } 
-        double t = (i%2==0? t_intra : t_inter);
-        offDiagonal(i, i+1) = t;
-        offDiagonal(i+1, i) = t;
-    }
-}
+using namespace std::complex_literals;
 
 
 void rk4_step(const PrimeFunction& func,
@@ -64,24 +35,48 @@ const MatrixXcd time_series(int N, double psi0,
     psi0_.setConstant(psi0);
     double time_start = 0.;
     VectorXd t_values = VectorXd::LinSpaced(static_cast<int>((time_end - time_start) / time_delta)+1, time_start, time_end);
-    std::cout << "real delta t:" << t_values(1)-t_values(0)<< ","<< t_values(0)<< std::endl;
-    std::cout << "num t: " << t_values.size() << std::endl;
-    std::cout << "orig delta t: " << time_delta << std::endl;
     MatrixXcd psi_values(t_values.size(), Ns);
 
     MatrixXcd psi = psi0_;
+
+
+    MatrixXd offDiagonal = MatrixXd::Zero(Ns,Ns);
+
+    double t_intra = t1, t_inter = t2;
+    for (int i = 0; i < Ns-1; i++) {
+        double t = (i%2==0? t_intra : t_inter);
+        offDiagonal(i, i+1) = t;
+        if (i==N) { t_intra = t2; t_inter = t1; }
+        t = (i%2==0? t_intra : t_inter);
+        offDiagonal(i+1, i) = t;
+    }
     
-    setMasks(Ns);
-    setOffDiagonal(Ns, t1, t2);
     PrimeFunction psi_prime = [&](const double t, const MatrixXcd& psi) {
         MatrixXcd result(Ns,1);
-        MatrixXcd satGainTerm = MatrixXcd::Ones(Ns,1).cwiseQuotient(MatrixXcd::Ones(Ns,1)+psi.cwiseAbs2());
-        result = (satGainA*satGainTerm - MatrixXcd::Constant(Ns,1,gammaA)).cwiseProduct(psi).cwiseProduct(maskA);
-        result += (satGainB*satGainTerm - MatrixXcd::Constant(Ns,1,gammaB)).cwiseProduct(psi).cwiseProduct(maskB);
-        result -= std::complex<double>(0.,1.0)*offDiagonal*psi;
+
+        for (int i=0;i<Ns;i++) {
+            double satGainTerm = 1./(1.+std::norm(psi(i,0)));
+            double satGain, gamma;
+            if (i%2==0) {
+                satGain = satGainA; gamma = gammaA;
+            } else {
+                satGain = satGainB; gamma = gammaB;
+            }
+            result(i,0) = (satGain*satGainTerm-gamma)*psi(i,0);
+        }
+        result.noalias() -= 1.0i*offDiagonal*psi;
         return result;
     };
-    
+
+    // PrimeFunction psi_prime = [&](const double t, const MatrixXcd& psi) {
+    //     MatrixXcd result(Ns,1);
+    //     MatrixXcd satGainTerm = MatrixXcd::Ones(Ns,1).cwiseQuotient(MatrixXcd::Ones(Ns,1)+psi.cwiseAbs2());
+    //     result.noalias() = (satGainA*satGainTerm - gammaAVec).cwiseProduct(psi).cwiseProduct(maskA);
+    //     result.noalias() += (satGainB*satGainTerm - gammaBVec).cwiseProduct(psi).cwiseProduct(maskB);
+    //     result.noalias() -= 1.0i*offDiagonal*psi;
+    //     return result;
+    // };
+
     for (int i = 0; i < t_values.size(); i++)
     {
         rk4_step(psi_prime, psi, t_values(i), time_delta);
@@ -127,14 +122,16 @@ const MatrixXcd time_series(int N, double psi0,
 // }
 
 PYBIND11_MODULE(ssh_1d, m) {
-    m.doc() = "pybind11 example plugin"; // optional module docstring
+    m.doc() = "Module for time simulating 1D SSH system with domain-wall in the middle";
 
     m.def("time_series", &time_series, "Time series of 1D SSH system with domain wall", py::call_guard<py::gil_scoped_release>(),
+        py::return_value_policy::reference_internal,
         py::arg("N"),py::arg("psi0"),py::arg("satGainA"),py::arg("satGainB"),py::arg("gammaA"),py::arg("gammaB"),
         py::arg("time_end"),py::arg("time_delta"),py::arg("t1"),py::arg("t2"));
 }
 
 int main() {
+    //main function for testing c++ code directly
     int N = 10;
     double psi0 = 0.01;
     double t_end = 1200;

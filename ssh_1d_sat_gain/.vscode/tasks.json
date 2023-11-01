@@ -7,7 +7,8 @@
             "args": [
                 "-S ${workspaceFolder}/ssh_1d_cpp",
                 "-B ${workspaceFolder}/ssh_1d_cpp/build",
-                "-G Ninja"
+                "-G Ninja",
+                
             ]
         },
         {
@@ -20,7 +21,36 @@
                 "--target ssh_1d_runner",
             ],
             "dependsOn": ["configure-runner"]
-        }
+        },
+
+        {
+            "label": "run-cython-on-pyx",
+            "type": "shell",
+            "command": "cython -a -3 ${workspaceFolder}/ssh_1d_cython/ssh_1d.pyx --module-name ssh_1d",
+        },
+        {
+            "label": "configure-cython-module",
+            "type": "shell",
+            "command": "${config:cmake.cmakePath}",
+            "args": [
+                "-S ${workspaceFolder}/ssh_1d_cython",
+                "-B ${workspaceFolder}/ssh_1d_cython/build",
+                "-G Ninja",
+                "-DCMAKE_MAKE_PROGRAM=${config:cmake.configureSettings.CMAKE_MAKE_PROGRAM}",
+                "-DCMAKE_C_COMPILER=${config:cmake.environment.CC}"
+            ],
+            "dependsOn": ["run-cython-on-pyx"]
+        },
+        {
+            "label": "build-cython-module",
+            "type": "shell",
+            "command": "${config:cmake.cmakePath}",
+            "args": [
+                "--build",
+                "${workspaceFolder}/ssh_1d_cython/build"
+            ],
+            "dependsOn": ["configure-cython-module"]
+        },
     ],
     "version": "2.0.0"
 }
