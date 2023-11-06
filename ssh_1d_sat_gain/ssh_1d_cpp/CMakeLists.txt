@@ -1,13 +1,30 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.11)
+include(FetchContent)
 
 project(ssh_1d VERSION 0.1 LANGUAGES CXX)
 
 set(GPROF_EXPORT OFF)
-
 set(CMAKE_CXX_STANDARD 17)
+set(FETCHCONTENT_UPDATES_DISCONNECTED ON)
 
-set(PYBIND11_FINDPYTHON ON)
-add_subdirectory(pybind11)
+# set(pybind11_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../submodules/pybind11")
+# list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../submodules/pybind11")
+# message("Variable Value: ${CMAKE_PREFIX_PATH}")
+# find_package(pybind11 REQUIRED)
+
+FetchContent_Declare(
+    pybind11
+    GIT_REPOSITORY https://github.com/pybind/pybind11
+    GIT_TAG        v2.11.1
+)
+
+FetchContent_GetProperties(pybind11)
+if(NOT pybind11_POPULATED)
+    set(PYBIND11_FINDPYTHON ON)
+    FetchContent_Populate(pybind11)
+    add_subdirectory(${pybind11_SOURCE_DIR} ${pybind11_BINARY_DIR})
+endif()
+
 
 pybind11_add_module(ssh_1d main.cpp)
 add_executable(ssh_1d_runner main.cpp)
@@ -20,7 +37,7 @@ set(mingw_flags_for_python "-static-libgcc -static-libstdc++ -Wl,-Bstatic,--whol
 set_target_properties(ssh_1d PROPERTIES LIBRARY_OUTPUT_DIRECTORY "bin-module")
 set_target_properties(ssh_1d_runner PROPERTIES RUNTIME_OUTPUT_DIRECTORY "bin-runner")
 
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/eigen-3.4.0/")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../submodules/eigen")
 
 
 if(WIN32 AND MINGW)
