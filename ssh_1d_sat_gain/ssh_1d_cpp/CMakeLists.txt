@@ -7,10 +7,6 @@ set(GPROF_EXPORT OFF)
 set(CMAKE_CXX_STANDARD 17)
 set(FETCHCONTENT_UPDATES_DISCONNECTED ON)
 
-# set(pybind11_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../submodules/pybind11")
-# list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../submodules/pybind11")
-# message("Variable Value: ${CMAKE_PREFIX_PATH}")
-# find_package(pybind11 REQUIRED)
 
 FetchContent_Declare(
     pybind11
