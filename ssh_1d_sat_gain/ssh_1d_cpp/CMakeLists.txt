@@ -7,18 +7,29 @@ set(GPROF_EXPORT OFF)
 set(CMAKE_CXX_STANDARD 17)
 set(FETCHCONTENT_UPDATES_DISCONNECTED ON)
 
-
+# get pybind11:
 FetchContent_Declare(
     pybind11
     GIT_REPOSITORY https://github.com/pybind/pybind11
     GIT_TAG        v2.11.1
 )
-
 FetchContent_GetProperties(pybind11)
 if(NOT pybind11_POPULATED)
     set(PYBIND11_FINDPYTHON ON)
     FetchContent_Populate(pybind11)
     add_subdirectory(${pybind11_SOURCE_DIR} ${pybind11_BINARY_DIR})
+endif()
+
+# get eigen:
+FetchContent_Declare(
+    eigen
+    GIT_REPOSITORY https://gitlab.com/libeigen/eigen
+    GIT_TAG        3.4.0
+)
+FetchContent_GetProperties(eigen)
+if(NOT eigen_POPULATED)
+    FetchContent_Populate(eigen)
+    include_directories("${eigen_SOURCE_DIR}")
 endif()
 
 
@@ -33,7 +44,6 @@ set(mingw_flags_for_python "-static-libgcc -static-libstdc++ -Wl,-Bstatic,--whol
 set_target_properties(ssh_1d PROPERTIES LIBRARY_OUTPUT_DIRECTORY "bin-module")
 set_target_properties(ssh_1d_runner PROPERTIES RUNTIME_OUTPUT_DIRECTORY "bin-runner")
 
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../submodules/eigen")
 
 
 if(WIN32 AND MINGW)
