@@ -1,17 +1,35 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/eigen.h>
+#include <pybind11/stl.h>
 #include <Eigen/Dense>
+#include <unsupported/Eigen/FFT>
 #include <iostream>
 #include <complex>
 #include <functional>
 #include <fstream>
 #include <vector>
- 
+#include <chrono>
+#include <BS_thread_pool.hpp>
+
 using namespace Eigen;
 using PrimeFunction = std::function<MatrixXcd(const double, const MatrixXcd&)>;
 namespace py = pybind11;
 
 using namespace std::complex_literals;
+
+class TimeSeriesParams {
+public:
+    int N; double psi0; double satGainA; double satGainB; double gammaA; double gammaB;
+    double time_end; double time_delta;
+    double t1; double t2;
+    TimeSeriesParams(int N, double psi0, 
+        double satGainA, double satGainB, double gammaA, double gammaB, 
+        double time_end, double time_delta,
+        double t1, double t2):
+        N{N}, psi0{psi0}, satGainA{satGainA}, satGainB{satGainB}, gammaA{gammaA},gammaB{gammaB},
+        time_end{time_end}, time_delta{time_delta}, t1{t1}, t2{t2}
+        { }
+};
 
 
 void rk4_step(const PrimeFunction& func,
@@ -25,16 +43,14 @@ void rk4_step(const PrimeFunction& func,
     y = y + delta_t * (k1 + 2.0 * k2 + 2.0 * k3 + k4) / 6.0;
 }
 
-const MatrixXcd time_series(int N, double psi0, 
-    double satGainA, double satGainB, double gammaA, double gammaB, 
-    double time_end, double time_delta,
-    double t1, double t2) {
-    int Ns = 2*N+1;
+const MatrixXcd time_series(const TimeSeriesParams& params) {
+    TimeSeriesParams p = params;
+    int Ns = 2*p.N+1;
 
     MatrixXcd psi0_(Ns, 1);
-    psi0_.setConstant(psi0);
+    psi0_.setConstant(p.psi0);
     double time_start = 0.;
-    VectorXd t_values = VectorXd::LinSpaced(static_cast<int>((time_end - time_start) / time_delta)+1, time_start, time_end);
+    VectorXd t_values = VectorXd::LinSpaced(static_cast<int>((p.time_end - time_start) / p.time_delta)+1, time_start, p.time_end);
     MatrixXcd psi_values(t_values.size(), Ns);
 
     MatrixXcd psi = psi0_;
@@ -42,11 +58,11 @@ const MatrixXcd time_series(int N, double psi0,
 
     MatrixXd offDiagonal = MatrixXd::Zero(Ns,Ns);
 
-    double t_intra = t1, t_inter = t2;
+    double t_intra = p.t1, t_inter = p.t2;
     for (int i = 0; i < Ns-1; i++) {
         double t = (i%2==0? t_intra : t_inter);
         offDiagonal(i, i+1) = t;
-        if (i==N) { t_intra = t2; t_inter = t1; }
+        if (i==p.N) { t_intra = p.t2; t_inter = p.t1; }
         t = (i%2==0? t_intra : t_inter);
         offDiagonal(i+1, i) = t;
     }
@@ -58,9 +74,9 @@ const MatrixXcd time_series(int N, double psi0,
             double satGainTerm = 1./(1.+std::norm(psi(i,0)));
             double satGain, gamma;
             if (i%2==0) {
-                satGain = satGainA; gamma = gammaA;
+                satGain = p.satGainA; gamma = p.gammaA;
             } else {
-                satGain = satGainB; gamma = gammaB;
+                satGain = p.satGainB; gamma = p.gammaB;
             }
             result(i,0) = (satGain*satGainTerm-gamma)*psi(i,0);
         }
@@ -68,18 +84,9 @@ const MatrixXcd time_series(int N, double psi0,
         return result;
     };
 
-    // PrimeFunction psi_prime = [&](const double t, const MatrixXcd& psi) {
-    //     MatrixXcd result(Ns,1);
-    //     MatrixXcd satGainTerm = MatrixXcd::Ones(Ns,1).cwiseQuotient(MatrixXcd::Ones(Ns,1)+psi.cwiseAbs2());
-    //     result.noalias() = (satGainA*satGainTerm - gammaAVec).cwiseProduct(psi).cwiseProduct(maskA);
-    //     result.noalias() += (satGainB*satGainTerm - gammaBVec).cwiseProduct(psi).cwiseProduct(maskB);
-    //     result.noalias() -= 1.0i*offDiagonal*psi;
-    //     return result;
-    // };
-
     for (int i = 0; i < t_values.size(); i++)
     {
-        rk4_step(psi_prime, psi, t_values(i), time_delta);
+        rk4_step(psi_prime, psi, t_values(i), p.time_delta);
         psi_values.row(i) = psi.transpose();
     }
 
@@ -89,49 +96,76 @@ const MatrixXcd time_series(int N, double psi0,
     return t_psi_values;
 }
 
-// //tentative function to do fft and check oscillating, but python is more convenient for now:
-// bool time_series_is_oscillating(const MatrixXcd& time_series, double time_window_start, double time_window_end, double threshold)
-// {
-//     ArrayXd t_values = time_series.col(0).real();
-//     // MatrixXcd psi_values = time_series.rightCols(time_series.cols()-1);
-//     // Array<int, Dynamic, 1> time_section_filter = (t_values>time_window_start).cast<int>()*(t_values<time_window_end).cast<int>();
+double time_series_oscillating_factor(const TimeSeriesParams& params) {
+    int powOfTwo = (int) pow(2.0,16);
+    const MatrixXcd & time_series_mat = time_series(params);
+
+
+    int end_time_index = time_series_mat.rows()-1;
+    int start_time_index = end_time_index-powOfTwo+1;
+
+    FFT<double> fft;
+
+    MatrixXcd selected_psi = time_series_mat.block(start_time_index,1,end_time_index-start_time_index+1, time_series_mat.cols()-1);
+    MatrixXcd psi_fft(selected_psi.rows(),selected_psi.cols());
+    for (int i=0; i< selected_psi.cols(); i++)
+    {
+        VectorXcd dst(powOfTwo, 1);
+        fft.fwd(dst, selected_psi.col(i));
+        psi_fft.col(i) = dst;
+    }
+    psi_fft.topRows(10).setZero();
+
+
+    double of = psi_fft.cwiseAbs2().rowwise().sum().maxCoeff();
     
-//     int start_section_index = 0;
-//     int end_section_index = t_values.rows()-1;
-//     for (int i=0; i< t_values.rows(); i++)
-//     {
-//         if (start_section_index==-1 && t_values(i,0) > time_window_start)
-//             start_section_index = i;
-//         else if (t_values(i,0) > time_window_end) {
-//             end_section_index = i;
-//             break;
-//         }
-//     }
+    return of;
+}
 
-//     FFT<double> fft;
-//     // int num_section_rows = time_section_filter.cast<int>().sum();
-//     MatrixXcd selected_psi = time_series.block(start_section_index,1,end_section_index-start_section_index+1, time_series.cols()-1);
-//     MatrixXcd psi_fft(selected_psi.rows(),selected_psi.cols());
-//     for (int i=0; i< selected_psi.cols(); i++)
-//     {
-//         // VectorXcd tmpOut;
-//         psi_fft.col(i) = fft.fwd(selected_psi.col(i));
-//     }
+VectorXd calc_phase_diagram_parallel(const std::vector<TimeSeriesParams>& paramss)
+{
+    VectorXd results(paramss.size());
+    results.setZero();
+    BS::thread_pool pool;
+    auto loop = [&paramss, &results](int a, int b){
+        for (int i=a; i<b; i++) {
+            results(i) = time_series_oscillating_factor(paramss.at(i));
+        }
+        
+    };
+    pool.parallelize_loop(paramss.size(), loop).wait();
+    std::cout <<results(2)<<std::endl;
+    return results;
+}
 
-//     return psi_fft.cwiseAbs2().rowwise().sum().maxCoeff() > threshold;
-// }
 
 PYBIND11_MODULE(ssh_1d, m) {
     m.doc() = "Module for time simulating 1D SSH system with domain-wall in the middle";
 
-    m.def("time_series", &time_series, "Time series of 1D SSH system with domain wall", py::call_guard<py::gil_scoped_release>(),
-        py::return_value_policy::reference_internal,
+    py::class_<TimeSeriesParams>(m, "TimeSeriesParams")
+        .def(py::init<int, double, double, double, double, double, double, double, double, double>(),
         py::arg("N"),py::arg("psi0"),py::arg("satGainA"),py::arg("satGainB"),py::arg("gammaA"),py::arg("gammaB"),
         py::arg("time_end"),py::arg("time_delta"),py::arg("t1"),py::arg("t2"));
+
+    m.def("time_series", &time_series, "Time series of 1D SSH system with domain wall", py::call_guard<py::gil_scoped_release>(),
+        py::return_value_policy::reference_internal,
+        py::arg("params"));
+
+    m.def("time_series_oscillating_factor", &time_series_oscillating_factor, "Oscillating factor of time series of 1D SSH system with domain wall", 
+        py::call_guard<py::gil_scoped_release>(),
+        py::arg("params"));
+
+    m.def("calc_phase_diagram_parallel", &calc_phase_diagram_parallel);
 }
 
 int main() {
     //main function for testing c++ code directly
+
+    using std::chrono::high_resolution_clock;
+    using std::chrono::duration_cast;
+    using std::chrono::duration;
+    using std::chrono::milliseconds;
+
     int N = 10;
     double psi0 = 0.01;
     double t_end = 1200;
@@ -143,8 +177,18 @@ int main() {
     double t1 = 1;
     double t2 = 0.7;
 
-    time_series(N, psi0, gA, gB, gamA, gamB, t_end, dt, t1, t2);
+    TimeSeriesParams params(N, psi0, gA, gB, gamA, gamB, t_end, dt, t1, t2);
+    std::vector<TimeSeriesParams> paramss;
+    for (int i=0; i<2000; i++) {
+        paramss.push_back(TimeSeriesParams(params));
+    }
+
+    auto chrono_t1 = high_resolution_clock::now(); // ***CHRONO START***
+    VectorXd ofs = calc_phase_diagram_parallel(paramss);
+    auto chrono_t2 = high_resolution_clock::now();// ***CHRONO END***
+    duration<double, std::milli> ms_double = chrono_t2 - chrono_t1;
+    std::cout << "chrono: "<< ms_double.count() << "ms\n";
+
     return 0;
 }
 
- 

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.11)
+cmake_minimum_required(VERSION 3.11...3.28)
 include(FetchContent)
 
 project(ssh_1d VERSION 0.1 LANGUAGES CXX)
@@ -30,6 +30,18 @@ FetchContent_GetProperties(eigen)
 if(NOT eigen_POPULATED)
     FetchContent_Populate(eigen)
     include_directories("${eigen_SOURCE_DIR}")
+endif()
+
+# get threadpoollib:
+FetchContent_Declare(
+    threadpoollib
+    GIT_REPOSITORY https://github.com/bshoshany/thread-pool
+    GIT_TAG        v3.5.0
+)
+FetchContent_GetProperties(threadpoollib)
+if(NOT threadpoollib_POPULATED)
+    FetchContent_Populate(threadpoollib)
+    include_directories("${threadpoollib_SOURCE_DIR}/include")
 endif()
 
 

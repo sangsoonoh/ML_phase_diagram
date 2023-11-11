@@ -1,3 +1,5 @@
 ssh_1d_sat_gain/ssh_1d_cpp/build
 ssh_1d_sat_gain/.vscode/gmon.out
 ssh_1d_sat_gain/ssh_1d_cpp/gmon.out
+ssh_1d_sat_gain/*.hdf5
+
