@@ -16,11 +16,5 @@
             "console": "integratedTerminal",
             "preLaunchTask": "build-runner"
         },
-        {
-            "name": "Build Cython module",
-            "request": "launch",
-            "type": "cmake",
-            "preLaunchTask": "build-cython-module"
-        }
     ]
 }

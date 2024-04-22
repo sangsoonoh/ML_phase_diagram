@@ -1,0 +1,9 @@
+build
+.venv
+.vscode/gmon.out
+gmon.out
+deps
+*.hdf5
+*.pyd
+*.egg-info
+__pycache__

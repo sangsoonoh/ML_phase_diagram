@@ -1,0 +1,11 @@
+[requires]
+
+[tool_requires]
+mingw-builds/12.2.0
+ninja/1.11.1
+cmake/3.28.1
+
+[generators]
+CMakeDeps
+CMakeToolchain
+VirtualBuildEnv
