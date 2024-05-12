@@ -3,3 +3,4 @@ matplotlib
 conan
 typer
 setuptools
+h5py
