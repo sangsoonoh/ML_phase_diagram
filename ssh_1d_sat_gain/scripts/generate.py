@@ -1,5 +1,3 @@
-import commands
-print(commands)
 import timeseries as ts
 import numpy as np
 import concurrent.futures

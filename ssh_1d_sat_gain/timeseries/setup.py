@@ -1,28 +1,31 @@
-from pathlib import Path
 from setuptools import setup
-import glob
+from pybind11.setup_helpers import Pybind11Extension, build_ext
+from pathlib import Path
+from git import Repo
 
-subdirectory = 'build'  # Change this to your actual subdirectory name
-current_directory = Path(__file__).parent
+def download_eigen():
+  eigen_dir = Path(__file__).resolve().parent / "deps" / "eigen"
+  if not eigen_dir.is_dir():
+    Repo.clone_from(R"https://gitlab.com/libeigen/eigen.git", eigen_dir)
+  return str(eigen_dir)
 
-search_pattern = current_directory / subdirectory / '*.pyd'
-pyd_files = list(glob.glob(str(search_pattern)))
+eigen_include_dir = download_eigen()
 
-if not pyd_files:
-  raise FileNotFoundError("No .pyd file found in the specified subdirectory.")
+# Define the extension module
+ext_modules = [
+  Pybind11Extension(
+    "timeseries", 
+    ["src/main.cpp"], 
+    include_dirs=[eigen_include_dir],
+    extra_compile_args=["-std=c++17", "-O2"],
+  ),
+]
 
-pyd_file_path = pyd_files[0]
-print(pyd_file_path)
-relative_path = Path(pyd_file_path).relative_to(current_directory)
-print("before setup")
 setup(
-    name='timeseries',
-    version='0.0.1',
-    entry_points={
-        'console_scripts': [
-            'configure-timeseries=commands:configure_timeseries',
-            'build-timeseries=commands:build_timeseries',
-        ]
-    },
-    ext_package= str(relative_path) 
+  name="timeseries",
+  version="0.1.0",
+  author="Zeeshan Ahmad",
+  description="Module for generating timeseries of various systems",
+  ext_modules=ext_modules,
+  cmdclass={"build_ext": build_ext},
 )

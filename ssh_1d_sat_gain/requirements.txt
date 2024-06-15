@@ -1,6 +1,7 @@
+pybind11
+setuptools
 numpy
 matplotlib
-conan
 typer
-setuptools
 h5py
+GitPython

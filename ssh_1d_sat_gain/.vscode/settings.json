@@ -83,6 +83,6 @@
         "cfenv": "cpp"
     },
     "cmake.automaticReconfigure": false,
-    "C_Cpp.errorSquiggles": "enabled",
+    "C_Cpp.errorSquiggles": "disabled",
     
 }
