@@ -1,7 +1,7 @@
 {
-    "cmake.sourceDirectory": "C:/Users/zeeshan/ML_phase_diagram/ssh_1d_sat_gain/ssh_1d/functions_cpp",
+    "cmake.sourceDirectory": "${workspaceFolder}/timeseries",
     "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
-    "cmake.buildDirectory": "${workspaceFolder}/ssh_1d_cpp/build",
+    "cmake.buildDirectory": "${workspaceFolder}/timeseries/build",
     "python.analysis.diagnosticSeverityOverrides": {
         "reportMissingImports": "none"
     },
@@ -82,5 +82,7 @@
         "codecvt": "cpp",
         "cfenv": "cpp"
     },
+    "cmake.automaticReconfigure": false,
+    "C_Cpp.errorSquiggles": "enabled",
     
 }

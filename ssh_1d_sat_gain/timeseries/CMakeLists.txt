@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20...3.28)
 include(FetchContent)
 
-project(functions VERSION 0.1 LANGUAGES CXX)
+project(timeseries VERSION 0.1 LANGUAGES CXX)
 
 set(GPROF_EXPORT OFF)
 set(CMAKE_CXX_STANDARD 17)
@@ -45,15 +45,15 @@ if(NOT threadpoollib_POPULATED)
 endif()
 
 
-pybind11_add_module(functions functions.cpp)
-add_executable(main functions.cpp)
+pybind11_add_module(timeseries main.cpp)
+add_executable(main main.cpp)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2")
 set(total_link_flags " ")
 set(mingw_flags_for_python "-static-libgcc -static-libstdc++ -Wl,-Bstatic,--whole-archive -lwinpthread -Wl,--no-whole-archive") #https://cython.readthedocs.io/en/latest/src/tutorial/appendix.html
 
 
-#set_target_properties(functions PROPERTIES LIBRARY_OUTPUT_DIRECTORY "bin-module")
+#set_target_properties(timeseries PROPERTIES LIBRARY_OUTPUT_DIRECTORY "bin-module")
 #set_target_properties(main PROPERTIES RUNTIME_OUTPUT_DIRECTORY "bin-runner")
 
 
@@ -66,10 +66,10 @@ if (GPROF_EXPORT)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg -no-pie")
 endif()
 
-set_target_properties(functions PROPERTIES LINK_FLAGS "${total_link_flags}")
+set_target_properties(timeseries PROPERTIES LINK_FLAGS "${total_link_flags}")
 set_target_properties(main PROPERTIES LINK_FLAGS "${total_link_flags} -pg")
 
-target_compile_features(functions PRIVATE cxx_std_17)
+target_compile_features(timeseries PRIVATE cxx_std_17)
 target_compile_features(main PRIVATE cxx_std_17)
 
 target_link_libraries(main PUBLIC pybind11::pybind11 pybind11::module)
