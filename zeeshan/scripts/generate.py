@@ -3,6 +3,8 @@ import numpy as np
 import concurrent.futures
 import h5py
 import typer
+import rich
+
 app = typer.Typer(no_args_is_help=True)
 
 def generate_phase_diagram_points(num_points):
@@ -11,7 +13,7 @@ def generate_phase_diagram_points(num_points):
   y_ = np.random.uniform(0, 0.5, num_points)
   return x_,y_
 
-
+@app.command()
 def generate_time_series(export_file):
   x_,y_ = generate_phase_diagram_points(500)
   #generate data
@@ -22,10 +24,10 @@ def generate_time_series(export_file):
 
   def time_series_worker(i, x,y):
     gamA = x
-    params = ts.SSH_1D_saturated_gain_Params(N=10, psi0=0.01, satGainA=y+gamA, satGainB=0.,
+    system = ts.SSH_1D_satgain(N=10, psi0=0.01, satGainA=y+gamA, satGainB=0.,
                                     gammaA=gamA, gammaB=gamA, time_end=1200, time_delta=0.01,
                                     t1=1., t2=0.7)
-    time_series = ts.SSH_1D_saturated_gain(params)
+    time_series = system.simulate()
     time_series = time_series[1799:,:] # start from 1800-th time step
     samp_indices = np.round(np.linspace(0,time_series.shape[0]-1,time_sample_size)).astype(int)
     with h5py.File(tsfilename, 'a') as tsfile:

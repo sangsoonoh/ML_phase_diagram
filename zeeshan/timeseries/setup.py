@@ -28,4 +28,8 @@ setup(
   description="Module for generating timeseries of various systems",
   ext_modules=ext_modules,
   cmdclass={"build_ext": build_ext},
+  include_package_data=True,
+  package_data={
+    'timeseries': ['*.pyi'],
+  },
 )

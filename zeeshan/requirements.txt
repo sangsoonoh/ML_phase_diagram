@@ -1,7 +1,9 @@
 pybind11
+wheel
 setuptools
 numpy
 matplotlib
 typer
 h5py
 GitPython
+rich
