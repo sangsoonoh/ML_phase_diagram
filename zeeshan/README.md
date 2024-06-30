@@ -20,3 +20,14 @@ Clone this repo, cd into repo, and then the following commands:
 - `data\`: For storing generated timeseries datas (hdf5 files are gitignored)
 - `output\`: For storing results like plots, etc
 - `notebooks\`: Jupyter notebooks showing examples, etc
+
+## Scripts
+The following scripts are `typer` apps, so run them with `--help` flag for info on arguments, options etc.
+
+### `generate.py`
+Command for simulating time series and generating data files.
+E.g. `python ./scripts/generate.py --seed 42 ./data/example.hdf5` to generate a data file.
+Run `python ./scripts/generate.py --help` for all command options.
+
+### `classify.py`
+Makes data for a phase diagram based on chosen basis method (e.g. `dmd`) and stores it into the same data file it read from.

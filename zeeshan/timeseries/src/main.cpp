@@ -8,6 +8,8 @@
 #include <fstream>
 #include <vector>
 #include <chrono>
+#include <utility>
+#include <stdexcept>
 
 using namespace Eigen;
 using PrimeFunction = std::function<MatrixXcd(const double, const MatrixXcd&)>;
@@ -37,78 +39,67 @@ public:
     time_end{time_end}, time_delta{time_delta}, t1{t1}, t2{t2}
     { }
 
-  const MatrixXcd simulate() {
+  py::tuple simulate() {
     int Ns = 2*N+1;
-
-    MatrixXcd psi0_(Ns, 1);
-    psi0_.setConstant(psi0);
     double time_start = 0.;
     VectorXd t_values = VectorXd::LinSpaced(static_cast<int>((time_end - time_start) / time_delta)+1, time_start, time_end);
     MatrixXcd psi_values(t_values.size(), Ns);
 
-    MatrixXcd psi = psi0_;
-
-    MatrixXd offDiagonal = MatrixXd::Zero(Ns,Ns);
-
-    double t_intra = t1, t_inter = t2;
-    for (int i = 0; i < Ns-1; i++) {
-      double t = (i%2==0? t_intra : t_inter);
-      offDiagonal(i, i+1) = t;
-      if (i==N) { t_intra = t2; t_inter = t1; }
-      t = (i%2==0? t_intra : t_inter);
-      offDiagonal(i+1, i) = t;
-    }
-    
-    PrimeFunction psi_prime = [&](const double t, const MatrixXcd& psi) {
-      MatrixXcd result(Ns,1);
-
-      for (int i=0;i<Ns;i++) {
-        double satGainTerm = 1./(1.+std::norm(psi(i,0)));
-        double satGain, gamma;
-        if (i%2==0) {
-          satGain = satGainA; gamma = gammaA;
-        } else {
-          satGain = satGainB; gamma = gammaB;
-        }
-        result(i,0) = (satGain*satGainTerm-gamma)*psi(i,0);
-      }
-      result.noalias() -= 1.0i*offDiagonal*psi;
-      return result;
-    };
-
-    for (int i = 0; i < t_values.size(); i++)
     {
-      rk4_step(psi_prime, psi, t_values(i), time_delta);
-      psi_values.row(i) = psi.transpose();
+      py::gil_scoped_release release;
+      MatrixXcd psi0_(Ns, 1);
+      psi0_.setConstant(psi0);
+      MatrixXcd psi = psi0_;
+
+      MatrixXd offDiagonal = MatrixXd::Zero(Ns,Ns);
+
+      double t_intra = t1, t_inter = t2;
+      for (int i = 0; i < Ns-1; i++) {
+        double t = (i%2==0? t_intra : t_inter);
+        offDiagonal(i, i+1) = t;
+        if (i==N) { t_intra = t2; t_inter = t1; }
+        t = (i%2==0? t_intra : t_inter);
+        offDiagonal(i+1, i) = t;
+      }
+      
+      PrimeFunction psi_prime = [&](const double t, const MatrixXcd& psi) {
+        MatrixXcd result(Ns,1);
+
+        for (int i=0;i<Ns;i++) {
+          double satGainTerm = 1./(1.+std::norm(psi(i,0)));
+          double satGain, gamma;
+          if (i%2==0) {
+            satGain = satGainA; gamma = gammaA;
+          } else {
+            satGain = satGainB; gamma = gammaB;
+          }
+          result(i,0) = (satGain*satGainTerm-gamma)*psi(i,0);
+        }
+        result.noalias() -= 1.0i*offDiagonal*psi;
+        return result;
+      };
+
+      for (int i = 0; i < t_values.size(); i++)
+      {
+        rk4_step(psi_prime, psi, t_values(i), time_delta);
+        psi_values.row(i) = psi.transpose();
+      }
+      psi_values.transposeInPlace();
     }
 
-    MatrixXcd t_psi_values(t_values.size(), Ns+1);
-    t_psi_values << t_values , psi_values;
-
-    return t_psi_values;
+    py::tuple result(2);
+    result[0] = psi_values;
+    result[1] = t_values;
+    return result;
   }
-
 
 };
 
 
-
-PYBIND11_MODULE(timeseries, m) {
-
-    py::class_<SSH_1D_satgain>(m, "SSH_1D_satgain")
-        .def(py::init<int, double, double, double, double, double, double, double, double, double>(),
-          py::arg("N"),py::arg("psi0"),py::arg("satGainA"),py::arg("satGainB"),py::arg("gammaA"),py::arg("gammaB"),
-          py::arg("time_end"),py::arg("time_delta"),py::arg("t1"),py::arg("t2"))
-        .def("simulate", &SSH_1D_satgain::simulate, 
-          py::call_guard<py::gil_scoped_release>(), py::return_value_policy::reference_internal)
-        .def("testfunc", &SSH_1D_satgain::testfunc)
-        ;
-
-}
-
 int main() {
   //main function for testing c++ code directly
 
+  std::cout << "before" << std::endl;
   using std::chrono::high_resolution_clock;
   using std::chrono::duration_cast;
   using std::chrono::duration;
@@ -125,6 +116,17 @@ int main() {
   double t1 = 1;
   double t2 = 0.7;
 
+  std::cout << "after" << std::endl;
   return 0;
 }
 
+PYBIND11_MODULE(timeseries, m) {
+  m.def("main", &main);
+  py::class_<SSH_1D_satgain>(m, "SSH_1D_satgain")
+    .def(py::init<int, double, double, double, double, double, double, double, double, double>(),
+      py::arg("N"),py::arg("psi0"),py::arg("satGainA"),py::arg("satGainB"),py::arg("gammaA"),py::arg("gammaB"),
+      py::arg("time_end"),py::arg("time_delta"),py::arg("t1"),py::arg("t2"))
+    .def("simulate", &SSH_1D_satgain::simulate)
+    ;
+
+}

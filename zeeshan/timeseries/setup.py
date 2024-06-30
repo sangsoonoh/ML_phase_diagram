@@ -29,7 +29,10 @@ setup(
   ext_modules=ext_modules,
   cmdclass={"build_ext": build_ext},
   include_package_data=True,
-  package_data={
-    'timeseries': ['*.pyi'],
-  },
+  package_data={ 'timeseries': ['*.pyi', 'dev_commands.py'], },
+  entry_points={
+    'console_scripts': [
+      'tsmain=timeseries:main'
+    ]
+  }
 )
