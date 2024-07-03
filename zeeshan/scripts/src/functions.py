@@ -33,7 +33,7 @@ def print_hdf5(path:str):
     custom_print("/", file)
     file.visititems(custom_print)
 
-def update_hdf5(file:h5py.File, link:str, data:np.ndarray):
+def update_hdf5(file:h5py.File, link:str, data:np.ndarray, attrs:dict = None):
   """
   Updates dataset at given link path. Creates data set if it does not exist.
   Assumes that data is the same size as existing data
@@ -41,3 +41,6 @@ def update_hdf5(file:h5py.File, link:str, data:np.ndarray):
   if not (file.get(link)):
     file.create_dataset(link, shape=data.shape)
   file[link][:] = data
+  if attrs:
+    for key,value in attrs.items():
+      file[link].attrs[key] = value

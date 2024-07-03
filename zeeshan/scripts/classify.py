@@ -28,19 +28,23 @@ def j_star(Phis:List[np.ndarray], amplitudes_sample: np.ndarray):
 def fixed_library(
   indices:Annotated[List[int], typer.Argument(help="Indices in data file to use for fixed library. Comma-separated, no spaces e.g. 40,76")],
   basisMethod: Annotated[Optional[basis.BasisMethod], typer.Option("--basis", help="The method to use when producing basis for classification."),] = basis.BasisMethod.admd,
+  N_aug: Annotated[Optional[int], typer.Option("--Naug", help="(When using aDMD) Augmentation factor; Note the augmented basis will be Naug+1 times taller")] = 5,
 ):
   with h5py.File(state.datafilepath, 'r+') as file:
     num_points = file.attrs['numpoints']
     library_datas = [np.asarray(file.get(f'{i}/amplitudes')) for i in indices]
-    library_Phis = [basis.apply_basis_method(amplitudes=data, method=basisMethod) for data in library_datas]
-
+    library_Phis = [basis.apply_basis_method(amplitudes=data, method=basisMethod, N_aug=N_aug) for data in library_datas]
     data_indices = np.arange(num_points)
     classifications = np.empty_like(data_indices, dtype=int)
     for i,_ in zip(data_indices, classifications):
-      ith_data = file[f'{i}/amplitudes'][:]
+      ith_data = file[f'{i}/amplitudes'][:,-N_aug-1:]
+      if basisMethod == basis.BasisMethod.admd:
+        ith_data = ith_data.flatten('F')
       classifications[i] = j_star(library_Phis, ith_data)
-    f.update_hdf5(file, "classification/fixed-library", classifications)
-    print(f"Classification performed: {classifications}")
+    f.update_hdf5(file, "classification/fixed-library", classifications, attrs={
+      'basis': basisMethod.value
+    })
+    print(f"Classification performed: {classifications}, {classifications.shape}")
 
 
 @app.callback()

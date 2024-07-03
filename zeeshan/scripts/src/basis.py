@@ -74,11 +74,11 @@ class BasisMethod(str, Enum):
   dmd = "dmd"
   admd = "admd"
 
-def apply_basis_method(amplitudes:np.ndarray, method:BasisMethod):
+def apply_basis_method(amplitudes:np.ndarray, method:BasisMethod, N_aug:int=5):
   match method:
     case BasisMethod.pod:
       return pod(amplitudes)[0]
     case BasisMethod.dmd:
       return dmd(amplitudes)[0]
     case BasisMethod.admd:
-      return augment_dmd(*dmd(amplitudes), N_aug=5)
+      return augment_dmd(*dmd(amplitudes), N_aug=N_aug)
