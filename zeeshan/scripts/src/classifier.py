@@ -36,7 +36,7 @@ def dmd(amplitudes:np.ndarray):
   X2 = psi_values[:,1:]
 
   #step 2
-  U,S,Vh,r = f.trunc_svd(X1)
+  U,S,Vh,r = f.trunc_svd(X1,)
   Smat = np.diag(S)
   #step 3
   invS = np.linalg.inv(Smat)
@@ -59,7 +59,7 @@ def augment_dmd(Phi:np.ndarray, lam:np.ndarray, N_aug:int):
     - lam: corresponding eigenvalues of DMD modes (N_r)
 
   Returns:
-    - aPhi: augmented DMD modes (N_aug*N_site X N_r)
+    - aPhi: augmented DMD modes ((N_aug+1)*N_site X N_r)
   """
   Ns,Nr = Phi.shape
   Lam = np.tile(lam, (Ns,1))
@@ -73,6 +73,9 @@ class BasisMethod(str, Enum):
   pod = "pod"
   dmd = "dmd"
   admd = "admd"
+
+class ClassifyMethod(str, Enum):
+  fixed_library = "fixed-library"
 
 def apply_basis_method(amplitudes:np.ndarray, method:BasisMethod, N_aug:int=5):
   match method:
