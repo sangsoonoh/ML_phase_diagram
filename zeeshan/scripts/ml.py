@@ -1,4 +1,5 @@
 # in this file I will code phase diagrams generated using dmd, admd, etc
+from click import Context
 import numpy as np
 import h5py
 import typer
@@ -13,9 +14,15 @@ import src.datafile as datafile
 import matplotlib.pyplot as plt
 from rich.progress import Progress, TimeElapsedColumn, TextColumn, BarColumn, TimeRemainingColumn, ProgressColumn
 import concurrent.futures
+from typer.core import TyperGroup
 
-app = typer.Typer(help="To get started use generate command to make data file",
+class OrderCommands(TyperGroup):
+  def list_commands(self, ctx: Context) -> List[str]:
+    return list(self.commands)
+
+app = typer.Typer(help="To get started try commands in the Commands section below",
                   invoke_without_command=False,
+                  cls=OrderCommands,
 )
 
 class State:
