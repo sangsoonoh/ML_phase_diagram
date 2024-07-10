@@ -1,7 +1,6 @@
 # in this file I will code phase diagrams generated using dmd, admd, etc
 from click import Context
 import numpy as np
-import h5py
 import typer
 from typing_extensions import Annotated
 from typing import Optional, List
@@ -15,12 +14,14 @@ import matplotlib.pyplot as plt
 from rich.progress import Progress, TimeElapsedColumn, TextColumn, BarColumn, TimeRemainingColumn, ProgressColumn
 import concurrent.futures
 from typer.core import TyperGroup
+import networkx as nx
+import random
 
 class OrderCommands(TyperGroup):
   def list_commands(self, ctx: Context) -> List[str]:
     return list(self.commands)
 
-app = typer.Typer(help="To get started try commands in the Commands section below",
+app = typer.Typer(help="To get started try commands below with --help option",
                   invoke_without_command=False,
                   cls=OrderCommands,
 )
@@ -108,12 +109,15 @@ def classify(
   basisMethod: Annotated[Optional[classifier.BasisMethod], typer.Option("--basis", help="The method to use when producing basis for classification."),] = classifier.BasisMethod.admd,
   N_aug: Annotated[Optional[int], typer.Option("--Naug", help="(When using aDMD) Augmentation factor; Note the augmented basis will be Naug+1 times taller")] = 5,
 ):
+  """
+  Classify using fixed library
+  """
   df = datafile.DataFile(state.datafilepath)
   num_points = df.metadata['numpoints']
-  library_datas = [df.read_timeseries(i)[0] for i in indices]
+  library_datas = [df.read_timeseries(i)[0] for i in indices] # use readmany instead??
   library_Phis = [classifier.apply_basis_method(amplitudes=data, method=basisMethod, N_aug=N_aug) for data in library_datas]
   classifications = np.arange(num_points)
-  for index,amplitudes,times,attrs in df.readmany_timeseries():
+  for index,amplitudes,*_ in df.readmany_timeseries():
     ith_data = amplitudes[:,-N_aug-1:]
     if basisMethod == classifier.BasisMethod.admd:
       ith_data = ith_data.flatten('F')
@@ -121,13 +125,61 @@ def classify(
   df.write_classification(classifyMethod, basisMethod, classifications, { 'indices': indices })
   print(f"Classification performed: {classifications}, {classifications.shape}")
 
+def gamma_ij(Phi1:np.ndarray, Phi2:np.ndarray)->np.float64:
+  projector1 = Phi1 @ np.linalg.pinv(Phi1)
+  projector2 = Phi2 @ np.linalg.pinv(Phi2)
+  return np.linalg.norm(projector1 @ projector2, 'fro')**2 / (np.linalg.norm(projector1, 'fro')*np.linalg.norm(projector2,'fro'))
+
+def group_library(library:List[np.ndarray], gamma_th:float):
+  G = nx.Graph()
+  G.add_nodes_from(nodes_for_adding=np.arange(len(library)))
+  
+  for i in np.arange(len(library)):
+    for j in np.arange(len(library)):
+      if i!=j:
+        g = gamma_ij(library[i], library[j])
+        #print(i, j, g, g>gamma_th, type(g), type(gamma_th), gamma_th)
+        if g > gamma_th:
+          G.add_edge(i,j)
+  for component in nx.connected_components(G):
+    print(component)
+  exit()
+
+  
+
+@app.command()
+def classify_topdown(
+  seed:Annotated[Optional[int], typer.Option(help="Seed for randomly selecting initial phases")] = 30,
+  numInitBases:Annotated[Optional[int], typer.Option("--init-bases", help="Number of initial bases")] = 60,
+  gamma_threshold:Annotated[Optional[float], typer.Option("--thres", help="Gamma_th")] = 0.9,
+):
+  """
+  Classify using top down approach
+  """
+  df = datafile.DataFile(state.datafilepath)
+  random.seed(seed)
+  random_choices = random.sample(range(df.metadata['numpoints']), numInitBases)
+  N_aug = 25
+  library = []
+  for index, amplitudes, times, attrs in df.readmany_timeseries():
+    if index in random_choices:
+      Phi = classifier.apply_basis_method(amplitudes, classifier.BasisMethod.admd, N_aug=N_aug)
+      library.append(Phi)
+  group_library(library=library, gamma_th=gamma_threshold)
+
+  
+
+
 @app.command('plot-phases', help="Plot a phase diagram based on classification")
-def plot(
+def plot_phases(
   classifyMethod: Annotated[Optional[classifier.ClassifyMethod], typer.Option("--method", help="Classification method")],
   basisMethod: Annotated[Optional[classifier.BasisMethod], typer.Option("--basis", help="The method to use when producing basis for classification."),] = classifier.BasisMethod.admd,
   show: Annotated[Optional[bool], typer.Option(help="Show the matplotlib plot before exiting")] = False,
   save: Annotated[Optional[Path], typer.Option(help="Path to save figure to")] = None,
 ):
+  """
+  Plot a phase diagram based on classification
+  """
   df = datafile.DataFile(state.datafilepath)
   classifications,clattrs = df.read_classification(classifyMethod, basisMethod)
   indices,x,y = zip(*[ (index, attrs['x'], attrs['y']) for index,*_, attrs in df.readmany_timeseries()])
@@ -152,8 +204,8 @@ def plot(
 
 
 @app.callback()
-def main(datafilepath:Annotated[Path, typer.Argument(help="Path to HDF5 data file")]):
-  state.datafilepath = str(datafilepath)
+def main(hdf5_path:Annotated[Path, typer.Argument(help="Path to HDF5 data file", show_default=False)]):
+  state.datafilepath = str(hdf5_path)
 
 if __name__ == "__main__":
   app()

@@ -58,7 +58,7 @@ class DataFile:
     """
     Generator function to loop over timeseries e.g. for index,amplitudes,times,attrs in df.getmany_timeseries():
     Arguments:
-      - indices: Optional list of indices to yield. Yields all if None
+      - indices: Optional list of indices whose data is yielded. Yields all if None
     """
     if len(indices) == 0:
       indices = self.__all_timeseries_indices()

@@ -5,6 +5,11 @@ import numpy as np
 import src.functions as f
 from enum import Enum
 
+class BasisMethod(str, Enum):
+  pod = "pod"
+  dmd = "dmd"
+  admd = "admd"
+
 def pod(amplitudes:np.ndarray,):
   """
   Calculates POD basis from time series
@@ -69,14 +74,6 @@ def augment_dmd(Phi:np.ndarray, lam:np.ndarray, N_aug:int):
       aPhi[n*Ns:(n+1)*Ns, :] = Lam**n * Phi
   return aPhi
 
-class BasisMethod(str, Enum):
-  pod = "pod"
-  dmd = "dmd"
-  admd = "admd"
-
-class ClassifyMethod(str, Enum):
-  fixed_library = "fixed-library"
-
 def apply_basis_method(amplitudes:np.ndarray, method:BasisMethod, N_aug:int=5):
   match method:
     case BasisMethod.pod:
@@ -85,3 +82,6 @@ def apply_basis_method(amplitudes:np.ndarray, method:BasisMethod, N_aug:int=5):
       return dmd(amplitudes)[0]
     case BasisMethod.admd:
       return augment_dmd(*dmd(amplitudes), N_aug=N_aug)
+
+class ClassifyMethod(str, Enum):
+  fixed_library = "fixed-library"
