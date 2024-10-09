@@ -1,6 +1,7 @@
 build
 .venv
 .vscode/gmon.out
+.vscode/csak-timelog.json
 gmon.out
 deps
 *.hdf5

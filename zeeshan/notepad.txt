@@ -1,0 +1,20 @@
+fixed library inputs
+- list of numbers
+- other library name
+
+top-down inputs
+- starting numbers inputs
+- number and seed for random numbers
+- other library name
+- threshold
+
+bottom-up inputs
+- random seed
+- threshold
+
+
+all library inputs
+- library name
+- basis method + Naug
+
+

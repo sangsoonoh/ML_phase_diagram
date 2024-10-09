@@ -82,18 +82,34 @@ class DataFile:
       attrs = self.__attrs_to_dict(file.get(f"timeseries/{index}"))
     return amplitudes, times,attrs
 
-  def write_classification(self, classifyMethod:cl.ClassifyMethod, basisMethod:cl.BasisMethod, data:np.ndarray, attrs:Metadata):
+  def write_classification(self, name:str, data:np.ndarray, attrs: Metadata):
     with h5py.File(self.path, 'a') as file:
-      dsname = f"classifications/{classifyMethod}/{basisMethod}"
+      dsname = f"classifications/{name}"
       if dsname in file:
         file[dsname][:] = data
       else:
         file.create_dataset(dsname, data=data)
-      self.__dict_to_attrs(file[dsname], attrs)
-        
-  def read_classification(self, classifyMethod:cl.ClassifyMethod, basisMethod:cl.BasisMethod, ):
+      self.__dict_to_attrs(file[dsname], attrs=attrs)
+  
+  def read_classification(self, name:str):
     with h5py.File(self.path, 'r') as file:
-      dsname = f"classifications/{classifyMethod}/{basisMethod}"
+      dsname = f"classifications/{name}"
+      data = np.asarray(file[dsname])
+      attrs = self.__attrs_to_dict(file[dsname])
+    return data, attrs
+
+  def write_library(self, name:str, data:np.ndarray, attrs: Metadata):
+    with h5py.File(self.path, 'a') as file:
+      dsname = f"libraries/{name}"
+      if dsname in file:
+        file[dsname][:] = data
+      else:
+        file.create_dataset(dsname, data=data)
+      self.__dict_to_attrs(file[dsname], attrs=attrs)
+  
+  def read_library(self, name:str):
+    with h5py.File(self.path, 'r') as file:
+      dsname = f"libraries/{name}"
       data = np.asarray(file[dsname])
       attrs = self.__attrs_to_dict(file[dsname])
     return data, attrs

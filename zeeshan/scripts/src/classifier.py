@@ -82,6 +82,3 @@ def apply_basis_method(amplitudes:np.ndarray, method:BasisMethod, N_aug:int=5):
       return dmd(amplitudes)[0]
     case BasisMethod.admd:
       return augment_dmd(*dmd(amplitudes), N_aug=N_aug)
-
-class ClassifyMethod(str, Enum):
-  fixed_library = "fixed-library"
