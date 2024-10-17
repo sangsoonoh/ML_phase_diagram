@@ -210,39 +210,59 @@ def top_down_group_library(library:List[np.ndarray], gamma_th:float) -> List[Lis
       groups[i] = [item for item in groups[i] if item not in groups[j]]
   return groups
 
+class PlotOutput(str, Enum):
+  show = "show"
+  save = "save"
 
+@app.command('plot-classify', help="Plot a phase diagram based on classification")
+def plot_classification(
+  classificationName: Annotated[str, typer.Option("--name", help="Name of classification to plot")],
+  out: Annotated[PlotOutput, typer.Option("--out", help="Show or save figure")],
+  savePath: Annotated[str, typer.Option("--path", help="Path to save figure")] = R"out.png",
+):
+  df = datafile.DataFile(state.datafilepath)
+  classifications,clattrs = df.read_classification(classificationName)
+  indices,x,y = zip(*[ (index, attrs['x'], attrs['y']) for index,*_, attrs in df.readmany_timeseries()])
+  state.plotIndices = indices
+  fig, ax = plt.subplots()
+  ordered_classifications = [classifications[index] for index in indices]
+  ax.scatter(x, y, marker='o', c=ordered_classifications, picker=True)
+  ax.set_xlabel('x')
+  ax.set_xlabel('y')
+  ax.set_title('Phase diagram')
+  x,y = zip(*[ (attrs['x'], attrs['y']) for *_, attrs in df.readmany_timeseries(clattrs['indices'])])
+  ax.scatter(x, y, marker='x', c='red', s = 20, label=f'library')
+  ax.legend()
+  match out:
+    case PlotOutput.show:
+      def on_pick(event):
+        print(state.plotIndices[event.ind[0]])
+      plt.gcf().canvas.mpl_connect('pick_event', on_pick)
+      plt.show()
+    case PlotOutput.save:
+      fig.savefig(str(savePath))
+  return fig
 
-# @app.command('plot-phases', help="Plot a phase diagram based on classification")
-# def plot_phases(
-#   classifyMethod: Annotated[Optional[classifier.ClassifyMethod], typer.Option("--method", help="Classification method")],
-#   basisMethod: Annotated[Optional[classifier.BasisMethod], typer.Option("--basis", help="The method to use when producing basis for classification."),] = classifier.BasisMethod.admd,
-#   show: Annotated[Optional[bool], typer.Option(help="Show the matplotlib plot before exiting")] = False,
-#   save: Annotated[Optional[Path], typer.Option(help="Path to save figure to")] = None,
-# ):
-#   """
-#   Plot a phase diagram based on classification
-#   """
-#   df = datafile.DataFile(state.datafilepath)
-#   classifications,clattrs = df.read_classification(classifyMethod, basisMethod)
-#   indices,x,y = zip(*[ (index, attrs['x'], attrs['y']) for index,*_, attrs in df.readmany_timeseries()])
-#   state.plotIndices = indices
-#   fig, ax = plt.subplots()
-#   ordered_classifications = [classifications[index] for index in indices]
-#   ax.scatter(x, y, marker='o', c=ordered_classifications, picker=True)
-#   ax.set_xlabel('x')
-#   ax.set_xlabel('y')
-#   ax.set_title('Phase diagram')
-#   x,y = zip(*[ (attrs['x'], attrs['y']) for *_, attrs in df.readmany_timeseries(clattrs['indices'])])
-#   ax.scatter(x, y, marker='x', c='red', s = 20, label=f'library')
-#   ax.legend()
-#   if show:
-#     def on_pick(event):
-#       print(state.plotIndices[event.ind[0]])
-#     plt.gcf().canvas.mpl_connect('pick_event', on_pick)
-#     plt.show()
-#   if save:
-#     fig.savefig(str(save),)
-#   return fig
+@app.command('plot-series', help="Plot timeseries")
+def plot_timeseries(
+  index: Annotated[int, typer.Option("--index", help="index of series in datafile")],
+  out: Annotated[PlotOutput, typer.Option("--out", help="Show or save figure")],
+  savePath: Annotated[str, typer.Option("--path", help="Path to save figure")] = R"out.png",
+):
+  df = datafile.DataFile(state.datafilepath)
+  amplitudes, times, attrs = df.read_timeseries(index)
+  fig, ax = plt.subplots()
+  amp_a = np.sum(np.abs(amplitudes[::2,:])**2, axis=0)
+  amp_b = np.sum(np.abs(amplitudes[1::2,:])**2, axis=0)
+  ax.plot(times, amp_a, label = "a")
+  ax.plot(times, amp_b, label = "b")
+  ax.legend()
+  match out:
+    case PlotOutput.show:
+      plt.show()
+    case PlotOutput.save:
+      fig.savefig(str(savePath))
+  return fig
 
 
 @app.callback()
