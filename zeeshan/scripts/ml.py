@@ -18,6 +18,7 @@ import concurrent.futures
 from typer.core import TyperGroup
 import networkx as nx
 import random
+import re
 
 class OrderCommands(TyperGroup):
   def list_commands(self, ctx: Context) -> List[str]:
@@ -137,29 +138,32 @@ class LibraryMethod(str, Enum):
 def library(
   libraryName: Annotated[str, typer.Option("--name", help="Name of library to create")],
   libraryMethod: Annotated[LibraryMethod, typer.Option("--method", help="Library creation method")],
-  fromIndexSet: Annotated[str, typer.Option("--from", help="List of comma-separated indices, name of another library or 'random,n'")],
+  fromArg: Annotated[str, typer.Option("--from", help="List of comma-separated indices, name of another library or 'random,n'")],
   basisMethod: Annotated[Optional[classifier.BasisMethod], typer.Option("--basis", help="Basis method"),] = classifier.BasisMethod.admd,
   N_aug: Annotated[Optional[int], typer.Option("--Naug", help="(When using aDMD basis method) Augmentation factor - 1")] = 5,
   seed:Annotated[Optional[int], typer.Option(help="Random seed")] = 30,
   gamma_threshold:Annotated[Optional[float], typer.Option("--gamma", help="Gamma threshold; only used with top-down library method")] = 0.75,
+  eps_threshold:Annotated[Optional[float], typer.Option("--eps", help="Epsilon threshold; only used with bottom-up library method")] = 0.005,
 ):
   df = datafile.DataFile(state.datafilepath)
   attrs = { 
-    'basis': str(basisMethod), 
+    'basis': str(basisMethod.value), 
     'Naug': int(N_aug), 
-    'method': basisMethod.value, 'from': str(fromIndexSet) ,
+    'method': basisMethod.value, 'from': str(fromArg) ,
     'gamma': float(gamma_threshold),
   }
-  #parse --from:
-  try:
-    from_library_indices, attrs = df.read_library(fromIndexSet)
-  except:
-    if fromIndexSet.startswith("random"):
-      n = int(fromIndexSet.split(",")[1])
-      random.seed(seed)
-      from_library_indices = random.sample(range(df.metadata['numpoints']), n)
-    else:
-      from_library_indices = [int(i) for i in fromIndexSet.split(",")]
+
+  if re.search(R"^(\d+,)*(\d+)$", fromArg): # comma separated list of indices
+    from_library_indices = [int(i) for i in fromArg.split(",")]
+    rich.print(f"detected comma separated: {from_library_indices}")
+  elif re.search(R"^random,\d+$", fromArg): # random,n
+    n = int(fromArg.split(",")[1])
+    random.seed(seed)
+    from_library_indices = random.sample(range(df.metadata['numpoints']), n)
+    rich.print(f"detected random: {from_library_indices}")
+  else: # name of library
+    from_library_indices, attrs = df.read_library(fromArg)
+    rich.print(f"detected name: {from_library_indices}")
 
   match libraryMethod:
     case LibraryMethod.fixed:
@@ -174,8 +178,42 @@ def library(
       representatives = [random.choice(choices) for choices in groups_in_ts]
       df.write_library(libraryName, representatives, attrs=attrs)
     case LibraryMethod.bottomup:
-      pass
+      from_library = [
+        classifier.apply_basis_method(
+        amplitudes=amplitudes, 
+        method=basisMethod, N_aug=N_aug,
+        )
+        for _, amplitudes, *_ in df.readmany_timeseries(from_library_indices)
+      ]
+      indices = bottom_up_expand_library(
+        from_library, eps_threshold, df,
+        admd=(basisMethod == classifier.BasisMethod.admd),
+        N_aug = N_aug,
+      )
+      df.write_library(libraryName, indices, attrs=attrs)
+
+def eps_y(projectors:List[np.ndarray], y: np.ndarray):
+  possible_epss = [
+    np.linalg.norm(projector @ y - y) / np.linalg.norm(y) 
+    for projector in projectors
+  ]
+  return np.max(possible_epss)
+
       
+def bottom_up_expand_library(
+  library: List[np.ndarray], eps_th:float, df: datafile.DataFile, admd:bool,
+  N_aug:int,
+):
+  new_library_indices = []
+  projectors = [projector(Phi) for Phi in library]
+  for index, amplitudes, *_ in df.readmany_timeseries():
+    if not index in new_library_indices:
+      if admd:
+        amplitudes = amplitudes[:,-N_aug-1:]
+        amplitudes = amplitudes.flatten('F')
+      if eps_y(projectors, amplitudes) < eps_th:
+        new_library_indices.append(index)
+  return new_library_indices
 
 def gamma_ij(projector1:np.ndarray, projector2:np.ndarray)->np.float64:
   return np.linalg.norm(projector1 @ projector2, 'fro')**2 / (np.linalg.norm(projector1, 'fro')*np.linalg.norm(projector2,'fro'))
